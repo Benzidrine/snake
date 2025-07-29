@@ -9,6 +9,9 @@ const tileCount = canvas.width / gridSize;
 let snake = [
     {x: 10, y: 10}
 ];
+let enemySnake = [];
+let enemyDx = 0;
+let enemyDy = 0;
 let food = {};
 let obstacles = [];
 let dx = 0;
@@ -27,9 +30,90 @@ function generateFood() {
     food = randomTilePosition();
     
     while (snake.some(segment => segment.x === food.x && segment.y === food.y) ||
-           obstacles.some(obstacle => obstacle.x === food.x && obstacle.y === food.y)) {
+           obstacles.some(obstacle => obstacle.x === food.x && obstacle.y === food.y) ||
+           enemySnake.some(segment => segment.x === food.x && segment.y === food.y)) {
         food = randomTilePosition();
     }
+}
+
+function initializeEnemySnake() {
+    enemySnake = [];
+    let startX = Math.floor(tileCount * 0.75);
+    let startY = Math.floor(tileCount * 0.75);
+    
+    for (let i = 0; i < 7; i++) {
+        enemySnake.push({x: startX, y: startY + i});
+    }
+    
+    enemyDx = 0;
+    enemyDy = -1;
+}
+
+function getDistanceToPlayer(x, y) {
+    const playerHead = snake[0];
+    return Math.abs(x - playerHead.x) + Math.abs(y - playerHead.y);
+}
+
+function getPossibleMoves(snakeX, snakeY) {
+    const moves = [
+        {dx: 0, dy: -1, x: snakeX, y: snakeY - 1},
+        {dx: 0, dy: 1, x: snakeX, y: snakeY + 1},
+        {dx: -1, dy: 0, x: snakeX - 1, y: snakeY},
+        {dx: 1, dy: 0, x: snakeX + 1, y: snakeY}
+    ];
+    
+    return moves.filter(move => {
+        if (move.x < 0 || move.x >= tileCount || move.y < 0 || move.y >= tileCount) return false;
+        if (enemySnake.some(segment => segment.x === move.x && segment.y === move.y)) return false;
+        if (obstacles.some(obstacle => obstacle.x === move.x && obstacle.y === move.y)) return false;
+        if (enemyDx !== 0 && move.dx === -enemyDx) return false;
+        if (enemyDy !== 0 && move.dy === -enemyDy) return false;
+        return true;
+    });
+}
+
+function advanceEnemySnake() {
+    const head = enemySnake[0];
+    const possibleMoves = getPossibleMoves(head.x, head.y);
+    
+    if (possibleMoves.length === 0) {
+        const backupMoves = [
+            {dx: 0, dy: -1, x: head.x, y: head.y - 1},
+            {dx: 0, dy: 1, x: head.x, y: head.y + 1},
+            {dx: -1, dy: 0, x: head.x - 1, y: head.y},
+            {dx: 1, dy: 0, x: head.x + 1, y: head.y}
+        ].filter(move => 
+            move.x >= 0 && move.x < tileCount && 
+            move.y >= 0 && move.y < tileCount &&
+            !obstacles.some(obstacle => obstacle.x === move.x && obstacle.y === move.y)
+        );
+        
+        if (backupMoves.length > 0) {
+            const randomMove = backupMoves[Math.floor(Math.random() * backupMoves.length)];
+            enemyDx = randomMove.dx;
+            enemyDy = randomMove.dy;
+        }
+    } else {
+        const movesWithDistance = possibleMoves.map(move => ({
+            ...move,
+            distance: getDistanceToPlayer(move.x, move.y)
+        }));
+        
+        const farMoves = movesWithDistance.filter(move => move.distance >= 3);
+        const safeMoves = farMoves.length > 0 ? farMoves : movesWithDistance.filter(move => move.distance >= 2);
+        const finalMoves = safeMoves.length > 0 ? safeMoves : movesWithDistance;
+        
+        const bestMove = finalMoves.reduce((best, current) => 
+            current.distance > best.distance ? current : best
+        );
+        
+        enemyDx = bestMove.dx;
+        enemyDy = bestMove.dy;
+    }
+    
+    const newHead = {x: head.x + enemyDx, y: head.y + enemyDy};
+    enemySnake.unshift(newHead);
+    enemySnake.pop();
 }
 
 function generateObstacles() {
@@ -55,6 +139,11 @@ function drawGame() {
     
     ctx.fillStyle = 'lime';
     snake.forEach(segment => {
+        ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+    });
+    
+    ctx.fillStyle = 'orange';
+    enemySnake.forEach(segment => {
         ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
     });
     
@@ -98,6 +187,10 @@ function checkCollision() {
         return true;
     }
     
+    if (enemySnake.some(segment => segment.x === head.x && segment.y === head.y)) {
+        return true;
+    }
+    
     return false;
 }
 
@@ -114,6 +207,7 @@ function resetGame() {
     scoreElement.textContent = score;
     gameRunning = true;
     gameOverElement.style.display = 'none';
+    initializeEnemySnake();
     generateObstacles();
     generateFood();
 }
@@ -129,6 +223,8 @@ function gameLoop() {
             return;
         }
     }
+    
+    advanceEnemySnake();
     
     drawGame();
 }
@@ -169,6 +265,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
+initializeEnemySnake();
 generateObstacles();
 generateFood();
 setInterval(gameLoop, 100);
