@@ -10,6 +10,7 @@ let snake = [
     {x: 10, y: 10}
 ];
 let food = {};
+let obstacles = [];
 let dx = 0;
 let dy = 0;
 let score = 0;
@@ -25,8 +26,26 @@ function randomTilePosition() {
 function generateFood() {
     food = randomTilePosition();
     
-    while (snake.some(segment => segment.x === food.x && segment.y === food.y)) {
+    while (snake.some(segment => segment.x === food.x && segment.y === food.y) ||
+           obstacles.some(obstacle => obstacle.x === food.x && obstacle.y === food.y)) {
         food = randomTilePosition();
+    }
+}
+
+function generateObstacles() {
+    obstacles = [];
+    const numObstacles = Math.floor(Math.random() * 5) + 3;
+    
+    for (let i = 0; i < numObstacles; i++) {
+        let obstacle = randomTilePosition();
+        
+        while (snake.some(segment => segment.x === obstacle.x && segment.y === obstacle.y) ||
+               obstacles.some(existing => existing.x === obstacle.x && existing.y === obstacle.y) ||
+               (obstacle.x === food.x && obstacle.y === food.y)) {
+            obstacle = randomTilePosition();
+        }
+        
+        obstacles.push(obstacle);
     }
 }
 
@@ -41,6 +60,11 @@ function drawGame() {
     
     ctx.fillStyle = 'red';
     ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+    
+    ctx.fillStyle = 'hotpink';
+    obstacles.forEach(obstacle => {
+        ctx.fillRect(obstacle.x * gridSize, obstacle.y * gridSize, gridSize - 2, gridSize - 2);
+    });
 }
 
 function advanceSnake() {
@@ -70,6 +94,10 @@ function checkCollision() {
         }
     }
     
+    if (obstacles.some(obstacle => obstacle.x === head.x && obstacle.y === head.y)) {
+        return true;
+    }
+    
     return false;
 }
 
@@ -86,6 +114,7 @@ function resetGame() {
     scoreElement.textContent = score;
     gameRunning = true;
     gameOverElement.style.display = 'none';
+    generateObstacles();
     generateFood();
 }
 
@@ -140,6 +169,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
+generateObstacles();
 generateFood();
 setInterval(gameLoop, 100);
 drawGame();
