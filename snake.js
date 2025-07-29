@@ -54,6 +54,22 @@ function getDistanceToPlayer(x, y) {
     return Math.abs(x - playerHead.x) + Math.abs(y - playerHead.y);
 }
 
+function getDistanceToCenter(x, y) {
+    const centerX = Math.floor(tileCount / 2);
+    const centerY = Math.floor(tileCount / 2);
+    return Math.abs(x - centerX) + Math.abs(y - centerY);
+}
+
+function calculateMoveScore(move) {
+    const distanceToPlayer = getDistanceToPlayer(move.x, move.y);
+    const distanceToCenter = getDistanceToCenter(move.x, move.y);
+    
+    let score = distanceToPlayer * 2;
+    score -= distanceToCenter * 0.5;
+    
+    return score;
+}
+
 function getPossibleMoves(snakeX, snakeY) {
     const moves = [
         {dx: 0, dy: -1, x: snakeX, y: snakeY - 1},
@@ -89,22 +105,29 @@ function advanceEnemySnake() {
         );
         
         if (backupMoves.length > 0) {
-            const randomMove = backupMoves[Math.floor(Math.random() * backupMoves.length)];
-            enemyDx = randomMove.dx;
-            enemyDy = randomMove.dy;
+            const moveScores = backupMoves.map(move => ({
+                ...move,
+                score: calculateMoveScore(move)
+            }));
+            const bestMove = moveScores.reduce((best, current) => 
+                current.score > best.score ? current : best
+            );
+            enemyDx = bestMove.dx;
+            enemyDy = bestMove.dy;
         }
     } else {
-        const movesWithDistance = possibleMoves.map(move => ({
+        const movesWithScores = possibleMoves.map(move => ({
             ...move,
-            distance: getDistanceToPlayer(move.x, move.y)
+            score: calculateMoveScore(move),
+            distanceToPlayer: getDistanceToPlayer(move.x, move.y)
         }));
         
-        const farMoves = movesWithDistance.filter(move => move.distance >= 3);
-        const safeMoves = farMoves.length > 0 ? farMoves : movesWithDistance.filter(move => move.distance >= 2);
-        const finalMoves = safeMoves.length > 0 ? safeMoves : movesWithDistance;
+        const farMoves = movesWithScores.filter(move => move.distanceToPlayer >= 3);
+        const safeMoves = farMoves.length > 0 ? farMoves : movesWithScores.filter(move => move.distanceToPlayer >= 2);
+        const finalMoves = safeMoves.length > 0 ? safeMoves : movesWithScores;
         
         const bestMove = finalMoves.reduce((best, current) => 
-            current.distance > best.distance ? current : best
+            current.score > best.score ? current : best
         );
         
         enemyDx = bestMove.dx;
@@ -113,7 +136,12 @@ function advanceEnemySnake() {
     
     const newHead = {x: head.x + enemyDx, y: head.y + enemyDy};
     enemySnake.unshift(newHead);
-    enemySnake.pop();
+    
+    if (newHead.x === food.x && newHead.y === food.y) {
+        generateFood();
+    } else {
+        enemySnake.pop();
+    }
 }
 
 function generateObstacles() {
